@@ -26,3 +26,6 @@ boot/
 kernel/
 stage2.ld
 OS-Project_guide.md
+
+# Disk images
+*.img
