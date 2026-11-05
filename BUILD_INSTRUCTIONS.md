@@ -1,56 +1,41 @@
-REBUILD INSTRUCTIONS AFTER FIXES
-=================================
+# Build and inspect Vamos OS
 
-The following fixes have been applied:
+These steps describe the Makefile at source revision `53e774f6615fd5e9a5d8fdf69f1398aa4f93b05b`. Phase 2 did not install tools, build the kernel or run QEMU/GDB. Earlier notes about fixed hangs and absent `kernel/switch.asm` or `kernel/pmm.c` paths do not establish correctness of the current `src/` implementation.
 
-1. kernel/switch.asm - CRITICAL FIX for context switching hang
-   - Fixed corrupted register access after stack pointer change
-   - Caches eip and ds values before popping registers
+## Toolchain and targets
 
-2. kernel/pmm.c - DEBUG OUTPUT for PMM initialization hang
-   - Added serial port debug output to trace where hang occurs
+Use a Linux/WSL environment with `make`, `i686-linux-gnu-gcc`, `i686-linux-gnu-ld`, NASM and `qemu-system-i386`. For ISO creation, also install GRUB tooling and xorriso. See the [README package example](README.md#requirements). A compatible GDB is needed for debugging.
 
-3. src/shell.c - Fixed shell multitasking and commands
-   - Replaced `spawn` with `newprocess` that yields correctly (so the shell remains responsive)
-   - Added `killprocess` for safe process termination
-   - Fixed string overflow bugs and made process loops safe
+From the repository root:
 
-BUILD STEPS (using MSYS2 terminal):
-==================================
+```bash
+make clean
+make
+make run
+```
 
-1. Open MSYS2 terminal (C:\msys64\ucrt64.exe or similar)
+`make` links `kernel.bin` as an ELF32 kernel. `make run` uses `qemu-system-i386 -kernel kernel.bin -serial stdio`. For an ISO, use `make iso`; the current output filename is `sora.iso`.
 
-2. Navigate to project:
-   cd path/to/your/project/OSollama
+For a paused debugging session:
 
-3. Clean and rebuild:
-   make clean
-   make
+```bash
+make debug
+```
 
-4. Run in QEMU:
-   make run
+In another terminal, if the cross-debugger is installed:
 
-EXPECTED OUTPUT CHANGES:
-========================
+```text
+i686-linux-gnu-gdb kernel.bin
+(gdb) target remote localhost:1234
+(gdb) break kernel_main
+(gdb) continue
+```
 
-After the fix, you should see:
-- Serial output showing PMM debug messages: [PMM] Initializing, [PMM] Total frames, etc.
-- If it still hangs, the serial output will show exactly where the hang is
-- In the OS shell, you can now run `newprocess` to create a demo background process and `killprocess <pid>` to safely end it without blocking the shell.
+## Proposed manual checks, not executed results
 
-If building fails with errors, check:
-- NASM is available: /c/msys64/ucrt64/bin/nasm.exe
-- GCC is available: gcc.exe
-- LD is available: ld.exe
-- Working directory has Makefile
+1. Record host, compiler, NASM and QEMU versions and the checked-out commit.
+2. Capture build output and QEMU serial output. The initialization source contains messages such as `IDT ok`, `PMM ok`, `Scheduler ok` and `Interrupts enabled`; seeing them is a checkpoint, not proof of scheduler correctness.
+3. Inspect `help`, `meminfo`, `ps` and `newprocess` in the shell. Capture behavior rather than assuming each command completes safely.
+4. Investigate callee-saved register preservation across timer and cooperative switches, process-exit stack reclamation, and reserved-frame frees under GDB before claiming those concerns fixed.
 
-TROUBLESHOOTING:
-===============
-
-If you still see "PMM init..." hanging:
-- The serial debug output will tell you exactly where
-- It could be in: bitmap clearing, frame marking, or somewhere else
-- Once you see which step hangs, we can debug further
-
-The switch.asm fix addresses the earlier hang at "Enabling interrupts..."
-The pmm.c changes add tracing to find the new hang point.
+No automated harness exists in this revision. See [the evidence ledger](docs/source-backed-claims.md) for exact implementation references and remaining limits. Do not treat this manual sequence as a completed test run.
